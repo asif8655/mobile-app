@@ -6,6 +6,8 @@ class UserResponse {
   final String fullName;
   final bool isVerified;
   final bool isSuperUser;
+  final String? publicKey;
+  final String? publicKeyAlgorithm;
   final int unreadCount;
 
   UserResponse({
@@ -14,6 +16,8 @@ class UserResponse {
     required this.fullName,
     required this.isVerified,
     required this.isSuperUser,
+    this.publicKey,
+    this.publicKeyAlgorithm,
     this.unreadCount = 0,
   });
 
@@ -24,6 +28,8 @@ class UserResponse {
       fullName: json['fullName'] as String,
       isVerified: json['isVerified'] as bool? ?? false,
       isSuperUser: json['isSuperUser'] as bool? ?? false,
+      publicKey: json['publicKey'] as String?,
+      publicKeyAlgorithm: json['publicKeyAlgorithm'] as String?,
       unreadCount: (json['unreadCount'] as num?)?.toInt() ?? 0,
     );
   }
@@ -34,6 +40,8 @@ class UserResponse {
         'fullName': fullName,
         'isVerified': isVerified,
         'isSuperUser': isSuperUser,
+        'publicKey': publicKey,
+        'publicKeyAlgorithm': publicKeyAlgorithm,
         'unreadCount': unreadCount,
       };
 
@@ -42,13 +50,19 @@ class UserResponse {
   factory UserResponse.fromJsonString(String source) =>
       UserResponse.fromJson(jsonDecode(source) as Map<String, dynamic>);
 
-  UserResponse copyWith({int? unreadCount}) {
+  UserResponse copyWith({
+    String? publicKey,
+    String? publicKeyAlgorithm,
+    int? unreadCount,
+  }) {
     return UserResponse(
       id: id,
       email: email,
       fullName: fullName,
       isVerified: isVerified,
       isSuperUser: isSuperUser,
+      publicKey: publicKey ?? this.publicKey,
+      publicKeyAlgorithm: publicKeyAlgorithm ?? this.publicKeyAlgorithm,
       unreadCount: unreadCount ?? this.unreadCount,
     );
   }

@@ -3,6 +3,11 @@ class MessageResponse {
   final String senderId;
   final String receiverId;
   final String content;
+  final bool encrypted;
+  final String? encryptionVersion;
+  final String? encryptionNonce;
+  final String? senderKeyId;
+  final String? receiverKeyId;
   final bool isRead;
   final DateTime sentAt;
 
@@ -11,6 +16,11 @@ class MessageResponse {
     required this.senderId,
     required this.receiverId,
     required this.content,
+    this.encrypted = false,
+    this.encryptionVersion,
+    this.encryptionNonce,
+    this.senderKeyId,
+    this.receiverKeyId,
     required this.isRead,
     required this.sentAt,
   });
@@ -21,6 +31,11 @@ class MessageResponse {
       senderId: json['senderId'] as String,
       receiverId: json['receiverId'] as String,
       content: json['content'] as String,
+      encrypted: json['encrypted'] as bool? ?? false,
+      encryptionVersion: json['encryptionVersion'] as String?,
+      encryptionNonce: json['encryptionNonce'] as String?,
+      senderKeyId: json['senderKeyId'] as String?,
+      receiverKeyId: json['receiverKeyId'] as String?,
       isRead: json['isRead'] as bool? ?? false,
       sentAt: DateTime.parse(json['sentAt'] as String),
     );
@@ -31,9 +46,30 @@ class MessageResponse {
         'senderId': senderId,
         'receiverId': receiverId,
         'content': content,
+        'encrypted': encrypted,
+        'encryptionVersion': encryptionVersion,
+        'encryptionNonce': encryptionNonce,
+        'senderKeyId': senderKeyId,
+        'receiverKeyId': receiverKeyId,
         'isRead': isRead,
         'sentAt': sentAt.toIso8601String(),
       };
+
+  MessageResponse copyWith({String? content}) {
+    return MessageResponse(
+      id: id,
+      senderId: senderId,
+      receiverId: receiverId,
+      content: content ?? this.content,
+      encrypted: encrypted,
+      encryptionVersion: encryptionVersion,
+      encryptionNonce: encryptionNonce,
+      senderKeyId: senderKeyId,
+      receiverKeyId: receiverKeyId,
+      isRead: isRead,
+      sentAt: sentAt,
+    );
+  }
 }
 
 class CallEventResponse {

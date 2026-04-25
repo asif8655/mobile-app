@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/storage/secure_storage.dart';
+import '../../../../core/utils/e2ee_service.dart';
 import '../../../../core/utils/logger.dart';
 import '../models/auth_models.dart';
 
@@ -15,6 +16,7 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
 class AuthRepository {
   final Dio _dio;
   final SecureStorageService _secureStorage;
+  late final E2eeService _e2eeService = E2eeService(_secureStorage);
 
   AuthRepository(this._dio, this._secureStorage);
 
@@ -25,9 +27,13 @@ class AuthRepository {
     );
     final authResponse = AuthResponse.fromJson(response.data);
     await _secureStorage.saveToken(authResponse.accessToken);
-    await _secureStorage.saveUser(authResponse.user.toJsonString());
-    log.i('Logged in as ${authResponse.user.email}');
-    return authResponse;
+    final userWithKey = await ensurePublicKeyPublished(authResponse.user);
+    log.i('Logged in as ${userWithKey.email}');
+    return AuthResponse(
+      accessToken: authResponse.accessToken,
+      tokenType: authResponse.tokenType,
+      user: userWithKey,
+    );
   }
 
   Future<String> register(String email, String password, String fullName) async {
@@ -48,13 +54,34 @@ class AuthRepository {
     return UserResponse.fromJsonString(userJson);
   }
 
+  Future<UserResponse> ensurePublicKeyPublished(UserResponse user) async {
+    final identity = await _e2eeService.ensureIdentity(user.id);
+    final userWithKey = user.copyWith(
+      publicKey: identity.publicKey,
+      publicKeyAlgorithm: E2eeService.publicKeyAlgorithm,
+    );
+
+    if (_e2eeService.needsPublicKeyUpload(user, identity.publicKey)) {
+      await _dio.put(
+        '/users/profile/public-key',
+        data: {
+          'publicKey': identity.publicKey,
+          'publicKeyAlgorithm': E2eeService.publicKeyAlgorithm,
+        },
+      );
+    }
+
+    await _secureStorage.saveUser(userWithKey.toJsonString());
+    return userWithKey;
+  }
+
   Future<String?> getSavedToken() async {
     return _secureStorage.getToken();
   }
 
   Future<void> logout() async {
-    await _secureStorage.clearAll();
-    log.i('Logged out, cleared storage');
+    await _secureStorage.clearAuth();
+    log.i('Logged out, cleared auth storage');
   }
 
   Future<void> updateFcmToken(String token) async {

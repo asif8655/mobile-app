@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:cryptography/cryptography.dart';
+import 'package:cryptography_flutter/cryptography_flutter.dart';
 import 'core/utils/call_notification_service.dart';
 import 'features/calling/presentation/providers/call_provider.dart';
 import 'app.dart';
@@ -50,6 +52,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 // ─────────────────────────────────────────────────────────────────────────────
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  Cryptography.instance = FlutterCryptography.defaultInstance;
 
   await Firebase.initializeApp();
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
