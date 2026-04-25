@@ -159,45 +159,32 @@ class ConversationNotifier
         ..._users.where((user) => user.id != receiver.id),
         receiver,
       ];
-      final payload = await _chatRepo.e2ee.encryptChatPayload(
-        senderId: currentUserId,
-        receiver: receiver,
-        plaintext: content,
-      );
-
-      // Send via STOMP for real-time
-      final sent = _stompManager.send(StompDestinations.chatSend, payload);
-      if (!sent) {
-        final savedMessage = await _chatRepo.sendEncryptedMessage(payload);
-        final messages = state.valueOrNull ?? const <MessageResponse>[];
-        state = AsyncValue.data([
-          ...messages,
-          await _decryptMessage(savedMessage),
-        ]);
-      }
-    } catch (e) {
-      log.e('Failed to send message: $e');
-      // Fallback to REST
+      Map<String, dynamic> payload;
       try {
-        final currentUserId = _authState.user?.id;
-        if (currentUserId == null) return;
-
-        final receiver = await _chatRepo.getUserById(_userId);
-        final payload = await _chatRepo.e2ee.encryptChatPayload(
+        payload = await _chatRepo.e2ee.encryptChatPayload(
           senderId: currentUserId,
           receiver: receiver,
           plaintext: content,
         );
-        final savedMessage = await _chatRepo.sendEncryptedMessage(payload);
-        final messages = state.valueOrNull ?? const <MessageResponse>[];
-        state = AsyncValue.data([
-          ...messages,
-          await _decryptMessage(savedMessage),
-        ]);
-      } catch (restError) {
-        log.e('REST fallback also failed: $restError');
-        rethrow;
+      } catch (encryptionError) {
+        log.w('Encryption unavailable, sending plaintext: $encryptionError');
+        payload = {
+          'receiverId': receiver.id,
+          'content': content,
+          'encrypted': false,
+        };
       }
+
+      // Persist via REST to ensure message delivery even if realtime socket is unstable.
+      final savedMessage = await _chatRepo.sendEncryptedMessage(payload);
+      final messages = state.valueOrNull ?? const <MessageResponse>[];
+      state = AsyncValue.data([
+        ...messages,
+        await _decryptMessage(savedMessage),
+      ]);
+    } catch (e) {
+      log.e('Failed to send message: $e');
+      rethrow;
     }
   }
 
