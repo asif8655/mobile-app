@@ -18,7 +18,7 @@ class StompClientManager {
   bool _isConnected = false;
 
   final Map<String, StompMessageCallback> _subscriptionCallbacks = {};
-  final List<StompUnsubscribe> _activeSubscriptions = [];
+  final Map<String, StompUnsubscribe> _activeSubscriptions = {};
 
   /// Messages queued while STOMP is not yet connected.
   final List<_QueuedMessage> _sendQueue = [];
@@ -87,6 +87,11 @@ class StompClientManager {
   }
 
   void _subscribe(String destination, StompMessageCallback callback) {
+    final existingUnsub = _activeSubscriptions.remove(destination);
+    if (existingUnsub != null) {
+      existingUnsub(unsubscribeHeaders: {});
+    }
+
     final unsub = _client!.subscribe(
       destination: destination,
       callback: (frame) {
@@ -100,7 +105,7 @@ class StompClientManager {
         }
       },
     );
-    _activeSubscriptions.add(unsub);
+    _activeSubscriptions[destination] = unsub;
   }
 
   /// Send immediately if connected. Returns false when the socket is not ready.
@@ -140,11 +145,10 @@ class StompClientManager {
   }
 
   void disconnect() {
-    for (final unsub in _activeSubscriptions) {
+    for (final unsub in _activeSubscriptions.values) {
       unsub(unsubscribeHeaders: {});
     }
     _activeSubscriptions.clear();
-    _subscriptionCallbacks.clear();
     _sendQueue.clear();
     _client?.deactivate();
     _isConnected = false;

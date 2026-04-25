@@ -22,6 +22,8 @@ enum CallStatus {
 
 enum CallType { voice, video }
 
+const _callNoChange = Object();
+
 class CallState {
   final CallStatus status;
   final CallType callType;
@@ -50,26 +52,36 @@ class CallState {
   CallState copyWith({
     CallStatus? status,
     CallType? callType,
-    String? remoteUserId,
-    String? remoteUserName,
-    String? channelName,
-    RtcTokenResponse? rtcToken,
+    Object? remoteUserId = _callNoChange,
+    Object? remoteUserName = _callNoChange,
+    Object? channelName = _callNoChange,
+    Object? rtcToken = _callNoChange,
     bool? isMuted,
     bool? isSpeakerOn,
     bool? isVideoEnabled,
-    String? errorMessage,
+    Object? errorMessage = _callNoChange,
   }) {
     return CallState(
       status: status ?? this.status,
       callType: callType ?? this.callType,
-      remoteUserId: remoteUserId ?? this.remoteUserId,
-      remoteUserName: remoteUserName ?? this.remoteUserName,
-      channelName: channelName ?? this.channelName,
-      rtcToken: rtcToken ?? this.rtcToken,
+      remoteUserId: identical(remoteUserId, _callNoChange)
+          ? this.remoteUserId
+          : remoteUserId as String?,
+      remoteUserName: identical(remoteUserName, _callNoChange)
+          ? this.remoteUserName
+          : remoteUserName as String?,
+      channelName: identical(channelName, _callNoChange)
+          ? this.channelName
+          : channelName as String?,
+      rtcToken: identical(rtcToken, _callNoChange)
+          ? this.rtcToken
+          : rtcToken as RtcTokenResponse?,
       isMuted: isMuted ?? this.isMuted,
       isSpeakerOn: isSpeakerOn ?? this.isSpeakerOn,
       isVideoEnabled: isVideoEnabled ?? this.isVideoEnabled,
-      errorMessage: errorMessage,
+      errorMessage: identical(errorMessage, _callNoChange)
+          ? this.errorMessage
+          : errorMessage as String?,
     );
   }
 }
@@ -77,10 +89,10 @@ class CallState {
 class CallNotifier extends StateNotifier<CallState> {
   final ChatRepository _chatRepo;
   final StompClientManager _stompManager;
-  final AuthState _authState;
+  final Ref _ref;
   Timer? _callTimeoutTimer;
 
-  CallNotifier(this._chatRepo, this._stompManager, this._authState)
+  CallNotifier(this._chatRepo, this._stompManager, this._ref)
     : super(const CallState()) {
     _subscribeToCallEvents();
   }
@@ -255,7 +267,7 @@ class CallNotifier extends StateNotifier<CallState> {
     String targetUserName,
     CallType type,
   ) async {
-    final currentUserId = _authState.user?.id;
+    final currentUserId = _ref.read(authProvider).user?.id;
     if (currentUserId == null) {
       state = state.copyWith(
         errorMessage: 'Please sign in again before starting a call',
@@ -392,6 +404,5 @@ class CallNotifier extends StateNotifier<CallState> {
 final callProvider = StateNotifierProvider<CallNotifier, CallState>((ref) {
   final chatRepo = ref.read(chatRepositoryProvider);
   final stompManager = ref.read(stompClientManagerProvider);
-  final authState = ref.watch(authProvider);
-  return CallNotifier(chatRepo, stompManager, authState);
+  return CallNotifier(chatRepo, stompManager, ref);
 });

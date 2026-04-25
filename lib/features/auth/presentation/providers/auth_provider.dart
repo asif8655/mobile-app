@@ -10,6 +10,8 @@ import '../../data/repositories/auth_repository.dart';
 // Auth state
 enum AuthStatus { initial, loading, authenticated, unauthenticated, error }
 
+const _noChange = Object();
+
 class AuthState {
   final AuthStatus status;
   final UserResponse? user;
@@ -25,15 +27,17 @@ class AuthState {
 
   AuthState copyWith({
     AuthStatus? status,
-    UserResponse? user,
-    String? token,
-    String? errorMessage,
+    Object? user = _noChange,
+    Object? token = _noChange,
+    Object? errorMessage = _noChange,
   }) {
     return AuthState(
       status: status ?? this.status,
-      user: user ?? this.user,
-      token: token ?? this.token,
-      errorMessage: errorMessage,
+      user: identical(user, _noChange) ? this.user : user as UserResponse?,
+      token: identical(token, _noChange) ? this.token : token as String?,
+      errorMessage: identical(errorMessage, _noChange)
+          ? this.errorMessage
+          : errorMessage as String?,
     );
   }
 }
