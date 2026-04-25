@@ -1,0 +1,62 @@
+name: delamate
+description: "Delamate Messaging - Real-time chat, voice & video calls"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # State Management
+  flutter_riverpod: ^2.6.1
+  riverpod_annotation: ^2.6.1
+
+  # Networking
+  dio: ^5.7.0
+  stomp_dart_client: ^2.0.0
+
+  # Navigation
+  go_router: ^14.8.1
+
+  # Storage
+  flutter_secure_storage: ^9.2.4
+  shared_preferences: ^2.3.5
+
+  # Agora (Voice/Video Calling)
+  agora_rtc_engine: ^6.5.0
+
+  # Permissions
+  permission_handler: ^11.3.1
+
+  # Push Notifications
+  firebase_core: ^3.12.1
+  firebase_messaging: ^15.2.4
+  flutter_local_notifications: ^18.0.1
+
+  # UI & Design
+  google_fonts: ^6.2.1
+  shimmer: ^3.0.0
+  cached_network_image: ^3.4.1
+  flutter_animate: ^4.5.2
+
+  # Utilities
+  intl: ^0.19.0
+  logger: ^2.5.0
+  json_annotation: ^4.9.0
+  uuid: ^4.5.1
+  url_launcher: ^6.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  build_runner: ^2.4.14
+  json_serializable: ^6.9.4
+
+flutter:
+  uses-material-design: true
