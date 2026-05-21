@@ -45,11 +45,13 @@ dependencies:
   flutter_animate: ^4.5.2
 
   # Utilities
+  cryptography: ^2.7.0
   intl: ^0.19.0
   logger: ^2.5.0
   json_annotation: ^4.9.0
   uuid: ^4.5.1
   url_launcher: ^6.3.1
+  cryptography_flutter: ^2.3.4
 
 dev_dependencies:
   flutter_test:

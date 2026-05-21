@@ -10,6 +10,8 @@ import '../../data/repositories/auth_repository.dart';
 // Auth state
 enum AuthStatus { initial, loading, authenticated, unauthenticated, error }
 
+const _noChange = Object();
+
 class AuthState {
   final AuthStatus status;
   final UserResponse? user;
@@ -25,15 +27,17 @@ class AuthState {
 
   AuthState copyWith({
     AuthStatus? status,
-    UserResponse? user,
-    String? token,
-    String? errorMessage,
+    Object? user = _noChange,
+    Object? token = _noChange,
+    Object? errorMessage = _noChange,
   }) {
     return AuthState(
       status: status ?? this.status,
-      user: user ?? this.user,
-      token: token ?? this.token,
-      errorMessage: errorMessage,
+      user: identical(user, _noChange) ? this.user : user as UserResponse?,
+      token: identical(token, _noChange) ? this.token : token as String?,
+      errorMessage: identical(errorMessage, _noChange)
+          ? this.errorMessage
+          : errorMessage as String?,
     );
   }
 }
@@ -49,9 +53,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> _checkSavedAuth() async {
     final token = await _authRepository.getSavedToken();
-    final user = await _authRepository.getSavedUser();
+    final savedUser = await _authRepository.getSavedUser();
 
-    if (token != null && user != null) {
+    if (token != null && savedUser != null) {
+      final user = await _authRepository.ensurePublicKeyPublished(savedUser);
       state = AuthState(
         status: AuthStatus.authenticated,
         user: user,

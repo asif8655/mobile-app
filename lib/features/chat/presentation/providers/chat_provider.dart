@@ -29,6 +29,17 @@ class UsersNotifier extends StateNotifier<AsyncValue<List<UserResponse>>> {
   Future<void> loadUsers() async {
     state = const AsyncValue.loading();
     try {
+      final currentUser = _authState.user;
+      if (currentUser != null) {
+        final identity = await _chatRepo.e2ee.ensureIdentity(currentUser.id);
+        if (_chatRepo.e2ee.needsPublicKeyUpload(
+          currentUser,
+          identity.publicKey,
+        )) {
+          await _chatRepo.updatePublicKey(identity.publicKey);
+        }
+      }
+
       final users = await _chatRepo.getUsers();
       state = AsyncValue.data(users);
     } catch (e, st) {
@@ -67,11 +78,18 @@ final conversationProvider =
       ConversationNotifier,
       AsyncValue<List<MessageResponse>>,
       String
-    >((ref, userId) {
+>((ref, userId) {
       final chatRepo = ref.read(chatRepositoryProvider);
       final stompManager = ref.read(stompClientManagerProvider);
       final authState = ref.read(authProvider);
-      return ConversationNotifier(chatRepo, stompManager, userId, authState);
+      final users = ref.read(usersProvider).valueOrNull ?? const <UserResponse>[];
+      return ConversationNotifier(
+        chatRepo,
+        stompManager,
+        userId,
+        authState,
+        users,
+      );
     });
 
 class ConversationNotifier
@@ -80,12 +98,14 @@ class ConversationNotifier
   final StompClientManager _stompManager;
   final String _userId;
   final AuthState _authState;
+  List<UserResponse> _users;
 
   ConversationNotifier(
     this._chatRepo,
     this._stompManager,
     this._userId,
     this._authState,
+    this._users,
   ) : super(const AsyncValue.loading()) {
     _init();
   }
@@ -98,7 +118,7 @@ class ConversationNotifier
   Future<void> loadMessages() async {
     try {
       final messages = await _chatRepo.getConversation(_userId);
-      state = AsyncValue.data(messages);
+      state = AsyncValue.data(await _decryptMessages(messages));
       // Mark as read when opening conversation
       await _chatRepo.markAsRead(_userId);
     } catch (e, st) {
@@ -116,12 +136,12 @@ class ConversationNotifier
                 message.receiverId == currentUserId) ||
             (message.senderId == currentUserId &&
                 message.receiverId == _userId)) {
-          state.whenData((messages) {
-            // Avoid duplicates
-            if (!messages.any((m) => m.id == message.id)) {
-              state = AsyncValue.data([...messages, message]);
-            }
-          });
+          final currentMessages = state.valueOrNull ?? const <MessageResponse>[];
+          if (!currentMessages.any((m) => m.id == message.id)) {
+            _decryptMessage(message).then((decryptedMessage) {
+              state = AsyncValue.data([...currentMessages, decryptedMessage]);
+            });
+          }
         }
       } catch (e) {
         log.e('Error parsing incoming message: $e');
@@ -131,23 +151,40 @@ class ConversationNotifier
 
   Future<void> sendMessage(String content) async {
     try {
-      // Send via STOMP for real-time
-      final sent = _stompManager.send(StompDestinations.chatSend, {
-        'receiverId': _userId,
-        'content': content,
-      });
-      if (!sent) {
-        await _chatRepo.sendMessage(_userId, content);
+      final currentUserId = _authState.user?.id;
+      if (currentUserId == null) return;
+
+      final receiver = await _chatRepo.getUserById(_userId);
+      _users = [
+        ..._users.where((user) => user.id != receiver.id),
+        receiver,
+      ];
+      Map<String, dynamic> payload;
+      try {
+        payload = await _chatRepo.e2ee.encryptChatPayload(
+          senderId: currentUserId,
+          receiver: receiver,
+          plaintext: content,
+        );
+      } catch (encryptionError) {
+        log.w('Encryption unavailable, sending plaintext: $encryptionError');
+        payload = {
+          'receiverId': receiver.id,
+          'content': content,
+          'encrypted': false,
+        };
       }
+
+      // Persist via REST to ensure message delivery even if realtime socket is unstable.
+      final savedMessage = await _chatRepo.sendEncryptedMessage(payload);
+      final messages = state.valueOrNull ?? const <MessageResponse>[];
+      state = AsyncValue.data([
+        ...messages,
+        await _decryptMessage(savedMessage),
+      ]);
     } catch (e) {
       log.e('Failed to send message: $e');
-      // Fallback to REST
-      try {
-        await _chatRepo.sendMessage(_userId, content);
-      } catch (restError) {
-        log.e('REST fallback also failed: $restError');
-        rethrow;
-      }
+      rethrow;
     }
   }
 
@@ -167,5 +204,22 @@ class ConversationNotifier
         messages.where((m) => m.id != messageId).toList(),
       );
     });
+  }
+
+  Future<List<MessageResponse>> _decryptMessages(
+    List<MessageResponse> messages,
+  ) async {
+    return Future.wait(messages.map(_decryptMessage));
+  }
+
+  Future<MessageResponse> _decryptMessage(MessageResponse message) async {
+    final currentUserId = _authState.user?.id;
+    if (currentUserId == null) return message;
+
+    return _chatRepo.e2ee.decryptMessage(
+      message: message,
+      currentUserId: currentUserId,
+      users: _users,
+    );
   }
 }

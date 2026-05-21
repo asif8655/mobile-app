@@ -3,6 +3,11 @@ class MessageResponse {
   final String senderId;
   final String receiverId;
   final String content;
+  final bool encrypted;
+  final String? encryptionVersion;
+  final String? encryptionNonce;
+  final String? senderKeyId;
+  final String? receiverKeyId;
   final bool isRead;
   final DateTime sentAt;
 
@@ -11,19 +16,55 @@ class MessageResponse {
     required this.senderId,
     required this.receiverId,
     required this.content,
+    this.encrypted = false,
+    this.encryptionVersion,
+    this.encryptionNonce,
+    this.senderKeyId,
+    this.receiverKeyId,
     required this.isRead,
     required this.sentAt,
   });
 
   factory MessageResponse.fromJson(Map<String, dynamic> json) {
     return MessageResponse(
-      id: json['id'] as String,
-      senderId: json['senderId'] as String,
-      receiverId: json['receiverId'] as String,
-      content: json['content'] as String,
-      isRead: json['isRead'] as bool? ?? false,
-      sentAt: DateTime.parse(json['sentAt'] as String),
+      id: _asString(json['id']),
+      senderId: _asString(json['senderId']),
+      receiverId: _asString(json['receiverId']),
+      content: _asString(json['content']),
+      encrypted: _asBool(json['encrypted']),
+      encryptionVersion: json['encryptionVersion'] as String?,
+      encryptionNonce: json['encryptionNonce'] as String?,
+      senderKeyId: json['senderKeyId'] as String?,
+      receiverKeyId: json['receiverKeyId'] as String?,
+      isRead: _asBool(json['isRead']),
+      sentAt: _asDateTime(json['sentAt']),
     );
+  }
+
+  static String _asString(dynamic value) {
+    if (value == null) return '';
+    return value.toString();
+  }
+
+  static bool _asBool(dynamic value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      return normalized == 'true' || normalized == '1';
+    }
+    return false;
+  }
+
+  static DateTime _asDateTime(dynamic value) {
+    if (value is String) {
+      final parsed = DateTime.tryParse(value);
+      if (parsed != null) return parsed;
+    }
+    if (value is num) {
+      return DateTime.fromMillisecondsSinceEpoch(value.toInt());
+    }
+    return DateTime.now();
   }
 
   Map<String, dynamic> toJson() => {
@@ -31,9 +72,30 @@ class MessageResponse {
         'senderId': senderId,
         'receiverId': receiverId,
         'content': content,
+        'encrypted': encrypted,
+        'encryptionVersion': encryptionVersion,
+        'encryptionNonce': encryptionNonce,
+        'senderKeyId': senderKeyId,
+        'receiverKeyId': receiverKeyId,
         'isRead': isRead,
         'sentAt': sentAt.toIso8601String(),
       };
+
+  MessageResponse copyWith({String? content}) {
+    return MessageResponse(
+      id: id,
+      senderId: senderId,
+      receiverId: receiverId,
+      content: content ?? this.content,
+      encrypted: encrypted,
+      encryptionVersion: encryptionVersion,
+      encryptionNonce: encryptionNonce,
+      senderKeyId: senderKeyId,
+      receiverKeyId: receiverKeyId,
+      isRead: isRead,
+      sentAt: sentAt,
+    );
+  }
 }
 
 class CallEventResponse {

@@ -2,24 +2,43 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../../../../core/network/dio_client.dart';
+import '../../../../core/storage/secure_storage.dart';
+import '../../../../core/utils/e2ee_service.dart';
 import '../../../auth/data/models/auth_models.dart';
 import '../models/chat_models.dart';
 
 final chatRepositoryProvider = Provider<ChatRepository>((ref) {
   final dioClient = ref.read(dioClientProvider);
-  return ChatRepository(dioClient.dio);
+  final secureStorage = ref.read(secureStorageProvider);
+  return ChatRepository(dioClient.dio, E2eeService(secureStorage));
 });
 
 class ChatRepository {
   final Dio _dio;
+  final E2eeService e2ee;
 
-  ChatRepository(this._dio);
+  ChatRepository(this._dio, this.e2ee);
 
   Future<List<UserResponse>> getUsers() async {
     final response = await _dio.get(ApiConstants.users);
     return (response.data as List)
         .map((json) => UserResponse.fromJson(json as Map<String, dynamic>))
         .toList();
+  }
+
+  Future<UserResponse> getUserById(String userId) async {
+    final response = await _dio.get('${ApiConstants.users}/$userId');
+    return UserResponse.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  Future<void> updatePublicKey(String publicKey) async {
+    await _dio.put(
+      '${ApiConstants.users}/profile/public-key',
+      data: {
+        'publicKey': publicKey,
+        'publicKeyAlgorithm': E2eeService.publicKeyAlgorithm,
+      },
+    );
   }
 
   Future<List<MessageResponse>> getConversation(String userId) async {
@@ -37,6 +56,13 @@ class ChatRepository {
         'content': content,
       },
     );
+    return MessageResponse.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  Future<MessageResponse> sendEncryptedMessage(
+    Map<String, dynamic> payload,
+  ) async {
+    final response = await _dio.post(ApiConstants.messages, data: payload);
     return MessageResponse.fromJson(response.data as Map<String, dynamic>);
   }
 
