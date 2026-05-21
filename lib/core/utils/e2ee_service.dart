@@ -7,6 +7,7 @@ import 'package:cryptography/cryptography.dart';
 import '../../features/auth/data/models/auth_models.dart';
 import '../../features/chat/data/models/chat_models.dart';
 import '../storage/secure_storage.dart';
+import 'logger.dart';
 
 class E2eeIdentity {
   final EcKeyPairData keyPair;
@@ -29,6 +30,140 @@ class E2eeService {
   final AesGcm _aesGcm = AesGcm.with256bits();
 
   E2eeService(this._secureStorage);
+
+  Future<SecretKey> derivePasswordKey(String password, String email) async {
+    final pbkdf2 = Pbkdf2(
+      macAlgorithm: Hmac.sha256(),
+      iterations: 100000,
+      bits: 256,
+    );
+    final baseKey = SecretKey(utf8.encode(password));
+    return pbkdf2.deriveKey(
+      secretKey: baseKey,
+      nonce: utf8.encode(email.toLowerCase()),
+    );
+  }
+
+  Future<String> encryptPrivateKey(
+    EcKeyPairData keyPair,
+    SecretKey passwordKey,
+  ) async {
+    final jwk = {
+      'key_ops': ['deriveBits'],
+      'ext': true,
+      'kty': 'EC',
+      'x': _toBase64Url(Uint8List.fromList(keyPair.x)),
+      'y': _toBase64Url(Uint8List.fromList(keyPair.y)),
+      'crv': 'P-256',
+      'd': _toBase64Url(Uint8List.fromList(keyPair.d)),
+    };
+    final privateKeyJson = jsonEncode(jwk);
+    final nonce = _randomBytes(12);
+    final secretBox = await _aesGcm.encrypt(
+      utf8.encode(privateKeyJson),
+      secretKey: passwordKey,
+      nonce: nonce,
+    );
+    final encryptedBytes = Uint8List.fromList([
+      ...secretBox.cipherText,
+      ...secretBox.mac.bytes,
+    ]);
+    return '${_toBase64Url(Uint8List.fromList(nonce))}.${_toBase64Url(encryptedBytes)}';
+  }
+
+  Future<EcKeyPairData> decryptPrivateKey(
+    String encryptedData,
+    SecretKey passwordKey,
+  ) async {
+    final parts = encryptedData.split('.');
+    if (parts.length != 2) {
+      throw FormatException('Invalid encrypted private key format');
+    }
+    final nonce = _fromBase64Url(parts[0]);
+    final encryptedBytes = _fromBase64Url(parts[1]);
+    final macStart = encryptedBytes.length - 16;
+    final secretBox = SecretBox(
+      encryptedBytes.sublist(0, macStart),
+      nonce: nonce,
+      mac: Mac(encryptedBytes.sublist(macStart)),
+    );
+    final plaintextBytes = await _aesGcm.decrypt(
+      secretBox,
+      secretKey: passwordKey,
+    );
+    final jwk = jsonDecode(utf8.decode(plaintextBytes)) as Map<String, dynamic>;
+    return EcKeyPairData(
+      d: _fromBase64Url(jwk['d'] as String),
+      x: _fromBase64Url(jwk['x'] as String),
+      y: _fromBase64Url(jwk['y'] as String),
+      type: KeyPairType.p256,
+    );
+  }
+
+  Future<E2eeIdentity> initializeIdentity({
+    required String userId,
+    required String email,
+    required String password,
+    required UserResponse serverUser,
+  }) async {
+    final storedPrivateKey = await _secureStorage.getE2eePrivateKey(userId);
+    final storedPublicKey = await _secureStorage.getE2eePublicKey(userId);
+    final passwordKey = await derivePasswordKey(password, email);
+
+    if (serverUser.encryptedPrivateKey != null &&
+        serverUser.encryptedPrivateKey!.isNotEmpty) {
+      try {
+        final keyPairData = await decryptPrivateKey(
+          serverUser.encryptedPrivateKey!,
+          passwordKey,
+        );
+        final publicKeyString = serverUser.publicKey!;
+        await _secureStorage.saveE2eePrivateKey(
+          userId,
+          _toBase64Url(Uint8List.fromList(keyPairData.d)),
+        );
+        await _secureStorage.saveE2eePublicKey(userId, publicKeyString);
+        return E2eeIdentity(
+          keyPair: keyPairData,
+          publicKey: publicKeyString,
+          keyId: await _calculateKeyId(publicKeyString),
+        );
+      } catch (e) {
+        log.e('Failed to decrypt synced private key from server: $e');
+      }
+    }
+
+    if (storedPrivateKey != null && storedPublicKey != null) {
+      final privateBytes = _fromBase64Url(storedPrivateKey);
+      final ecPublicKey = _publicKeyFromEncodedJwk(storedPublicKey);
+      return E2eeIdentity(
+        keyPair: EcKeyPairData(
+          d: privateBytes,
+          x: ecPublicKey.x,
+          y: ecPublicKey.y,
+          type: KeyPairType.p256,
+        ),
+        publicKey: storedPublicKey,
+        keyId: await _calculateKeyId(storedPublicKey),
+      );
+    }
+
+    final keyPair = await _ecdh.newKeyPair();
+    final keyPairData = await keyPair.extract();
+    final publicKeyString = _encodePublicKeyAsJwk(keyPairData.publicKey);
+
+    await _secureStorage.saveE2eePrivateKey(
+      userId,
+      _toBase64Url(Uint8List.fromList(keyPairData.d)),
+    );
+    await _secureStorage.saveE2eePublicKey(userId, publicKeyString);
+
+    return E2eeIdentity(
+      keyPair: keyPairData,
+      publicKey: publicKeyString,
+      keyId: await _calculateKeyId(publicKeyString),
+    );
+  }
 
   Future<E2eeIdentity> ensureIdentity(String userId) async {
     final privateKey = await _secureStorage.getE2eePrivateKey(userId);

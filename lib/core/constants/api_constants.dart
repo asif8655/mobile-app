@@ -1,10 +1,31 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+
 // API and App Constants
 class ApiConstants {
   ApiConstants._();
 
-  static const String baseUrl = 'https://delamate.me';
-  static const String apiBaseUrl = '$baseUrl/api';
-  static const String wsNativeUrl = 'wss://delamate.me/ws-native';
+  static String get baseUrl {
+    if (kDebugMode) {
+      if (!kIsWeb && Platform.isAndroid) {
+        return 'http://10.0.2.2:5000';
+      }
+      return 'http://localhost:5000';
+    }
+    return 'https://delamate.me';
+  }
+
+  static String get apiBaseUrl => '$baseUrl/api';
+
+  static String get wsNativeUrl {
+    if (kDebugMode) {
+      if (!kIsWeb && Platform.isAndroid) {
+        return 'ws://10.0.2.2:5000/ws-native';
+      }
+      return 'ws://localhost:5000/ws-native';
+    }
+    return 'wss://delamate.me/ws-native';
+  }
 
   // Auth
   static const String login = '/auth/login';

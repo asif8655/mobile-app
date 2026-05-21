@@ -8,6 +8,7 @@ class UserResponse {
   final bool isSuperUser;
   final String? publicKey;
   final String? publicKeyAlgorithm;
+  final String? encryptedPrivateKey;
   final int unreadCount;
 
   UserResponse({
@@ -18,6 +19,7 @@ class UserResponse {
     required this.isSuperUser,
     this.publicKey,
     this.publicKeyAlgorithm,
+    this.encryptedPrivateKey,
     this.unreadCount = 0,
   });
 
@@ -30,6 +32,7 @@ class UserResponse {
       isSuperUser: json['isSuperUser'] as bool? ?? false,
       publicKey: json['publicKey'] as String?,
       publicKeyAlgorithm: json['publicKeyAlgorithm'] as String?,
+      encryptedPrivateKey: json['encryptedPrivateKey'] as String?,
       unreadCount: (json['unreadCount'] as num?)?.toInt() ?? 0,
     );
   }
@@ -42,6 +45,7 @@ class UserResponse {
         'isSuperUser': isSuperUser,
         'publicKey': publicKey,
         'publicKeyAlgorithm': publicKeyAlgorithm,
+        'encryptedPrivateKey': encryptedPrivateKey,
         'unreadCount': unreadCount,
       };
 
@@ -53,6 +57,7 @@ class UserResponse {
   UserResponse copyWith({
     String? publicKey,
     String? publicKeyAlgorithm,
+    String? encryptedPrivateKey,
     int? unreadCount,
   }) {
     return UserResponse(
@@ -63,6 +68,7 @@ class UserResponse {
       isSuperUser: isSuperUser,
       publicKey: publicKey ?? this.publicKey,
       publicKeyAlgorithm: publicKeyAlgorithm ?? this.publicKeyAlgorithm,
+      encryptedPrivateKey: encryptedPrivateKey ?? this.encryptedPrivateKey,
       unreadCount: unreadCount ?? this.unreadCount,
     );
   }

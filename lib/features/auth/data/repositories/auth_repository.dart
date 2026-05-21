@@ -27,7 +27,7 @@ class AuthRepository {
     );
     final authResponse = AuthResponse.fromJson(response.data);
     await _secureStorage.saveToken(authResponse.accessToken);
-    final userWithKey = await ensurePublicKeyPublished(authResponse.user);
+    final userWithKey = await ensurePublicKeyPublished(authResponse.user, password);
     log.i('Logged in as ${userWithKey.email}');
     return AuthResponse(
       accessToken: authResponse.accessToken,
@@ -54,21 +54,52 @@ class AuthRepository {
     return UserResponse.fromJsonString(userJson);
   }
 
-  Future<UserResponse> ensurePublicKeyPublished(UserResponse user) async {
-    final identity = await _e2eeService.ensureIdentity(user.id);
-    final userWithKey = user.copyWith(
+  Future<UserResponse> ensurePublicKeyPublished(UserResponse user, [String? password]) async {
+    final E2eeIdentity identity;
+    if (password != null) {
+      identity = await _e2eeService.initializeIdentity(
+        userId: user.id,
+        email: user.email,
+        password: password,
+        serverUser: user,
+      );
+    } else {
+      identity = await _e2eeService.ensureIdentity(user.id);
+    }
+
+    var userWithKey = user.copyWith(
       publicKey: identity.publicKey,
       publicKeyAlgorithm: E2eeService.publicKeyAlgorithm,
+      encryptedPrivateKey: user.encryptedPrivateKey ?? '',
     );
 
-    if (_e2eeService.needsPublicKeyUpload(user, identity.publicKey)) {
+    if (user.publicKey != identity.publicKey ||
+        user.publicKeyAlgorithm != E2eeService.publicKeyAlgorithm ||
+        (password != null && (user.encryptedPrivateKey == null || user.encryptedPrivateKey!.isEmpty))) {
+      
+      String? encryptedPrivateKey;
+      if (password != null) {
+        final passwordKey = await _e2eeService.derivePasswordKey(password, user.email);
+        encryptedPrivateKey = await _e2eeService.encryptPrivateKey(identity.keyPair, passwordKey);
+      }
+
+      final Map<String, dynamic> requestData = {
+        'publicKey': identity.publicKey,
+        'publicKeyAlgorithm': E2eeService.publicKeyAlgorithm,
+      };
+      if (encryptedPrivateKey != null) {
+        requestData['encryptedPrivateKey'] = encryptedPrivateKey;
+      }
+
       await _dio.put(
         '/users/profile/public-key',
-        data: {
-          'publicKey': identity.publicKey,
-          'publicKeyAlgorithm': E2eeService.publicKeyAlgorithm,
-        },
+        data: requestData,
       );
+      if (encryptedPrivateKey != null) {
+        userWithKey = userWithKey.copyWith(
+          encryptedPrivateKey: encryptedPrivateKey,
+        );
+      }
     }
 
     await _secureStorage.saveUser(userWithKey.toJsonString());
